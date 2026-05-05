@@ -2,7 +2,7 @@
 
 This repository is a lightweight reference layer for a Docker Swarm service running behind Traefik.
 
-It uses symbolic links to reference live configuration and data stored on the host system under `/swarm`.
+### It is a copy from real scripts files (this needs to be automated).
 
 ---
 
@@ -35,3 +35,4 @@ This means:
 
 ```bash
 docker stack deploy -c docker-stack.yml scripts
+
