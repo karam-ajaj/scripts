@@ -50,7 +50,7 @@ jobs:
 
           # Copy data preserving structure
           if [ -d "data" ]; then
-            cp -r data/. public/
+            cp -r data/ public/
           fi
 
           # Copy nginx config for reference
