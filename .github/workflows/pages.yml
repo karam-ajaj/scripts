@@ -1,4 +1,4 @@
-name: Scripts - Mirror Nginx Structure
+name: Deploy Scripts (Clean Root Mapping)
 
 on:
   push:
@@ -24,33 +24,32 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Build static site (mirror data root)
+      - name: Build clean root (IMPORTANT FIX)
         run: |
           rm -rf public
           mkdir -p public
 
-          # IMPORTANT: mirror data exactly to root
+          # COPY ONLY CONTENT OF data/ INTO ROOT
+          # THIS FIXES DOUBLE /scripts/ PROBLEM
           cp -r data/. public/
 
-          # Create simple index page (fixes 404)
+      - name: Create index (optional but prevents 404)
+        run: |
           cat <<EOF > public/index.html
           <html>
-          <head>
-            <title>Scripts File Server</title>
-          </head>
+          <head><title>Scripts</title></head>
           <body>
-            <h1>Scripts Index</h1>
-            <p>Direct file access (Nginx-like structure)</p>
-            <ul>
+          <h1>Scripts Root</h1>
+          <ul>
           EOF
 
-          find public -type f ! -name index.html | sed 's|public/||' | sort | while read file; do
-            echo "<li><a href=\"$file\">$file</a></li>" >> public/index.html
+          find public -type f ! -name index.html | sed 's|public/||' | while read f; do
+            echo "<li><a href=\"/$f\">$f</a></li>" >> public/index.html
           done
 
           echo "</ul></body></html>" >> public/index.html
 
-      - name: Upload Pages artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
@@ -58,10 +57,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Deploy to GitHub Pages
