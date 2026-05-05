@@ -29,7 +29,7 @@ jobs:
           mkdir -p public
 
           # copy ONLY data folder content
-          cp -r data/scripts public/
+          cp -r data/scripts/ public/
 
           # create minimal index (fixes 404)
           cat <<EOF > public/index.html
