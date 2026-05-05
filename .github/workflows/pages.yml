@@ -1,4 +1,4 @@
-name: Scripts Repo - Validate + Nginx UI + Deploy Pages
+name: Scripts Repo - Validate + Tree + Deploy Pages
 
 on:
   push:
@@ -18,10 +18,11 @@ concurrency:
 
 jobs:
   validate:
+    name: Validate Nginx Config
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Validate nginx config
@@ -31,14 +32,15 @@ jobs:
             nginx:latest nginx -t
 
   build:
+    name: Build file tree site
     runs-on: ubuntu-latest
     needs: validate
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install tools
+      - name: Install tree tool
         run: sudo apt-get update && sudo apt-get install -y tree
 
       - name: Build static site
@@ -46,130 +48,49 @@ jobs:
           rm -rf public
           mkdir -p public
 
-          # FIXED: correct flattening
-          cp -r data/. public/
+          # Copy data preserving structure
+          if [ -d "data" ]; then
+            cp -r data/ public/
+          fi
 
+          # Copy nginx config for reference
           mkdir -p public/config
           cp config/listFiles.conf public/config/
 
-          # generate file list safely
-          tree data > /tmp/tree.txt || echo "tree not available" > /tmp/tree.txt
-
-          find data -type f | sort | sed 's|data/||' | while read f; do
-            echo "<a class='file' href='/$f'>📄 $f</a>" >> /tmp/files.txt
-          done
-
-          CONFIG_CONTENT=$(cat config/listFiles.conf 2>/dev/null || echo "no config")
-
+          # Generate index.html
           cat <<EOF > public/index.html
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Scripts File Server</title>
+          <html>
+          <head>
+            <title>Scripts File Server</title>
+            <style>
+              body { font-family: monospace; background: #111; color: #eee; padding: 20px; }
+              a { color: #6cf; text-decoration: none; }
+              a:hover { text-decoration: underline; }
+              pre { background: #222; padding: 10px; border-radius: 6px; }
+            </style>
+          </head>
+          <body>
 
-<style>
-body {
-  margin: 0;
-  font-family: monospace;
-  background: #0d1117;
-  color: #c9d1d9;
-}
+          <h1>📁 Data Folder Tree</h1>
+          <pre>
+          $(tree data)
+          </pre>
 
-.header {
-  padding: 14px;
-  background: #161b22;
-  border-bottom: 1px solid #30363d;
-}
+          <h2>📂 Files</h2>
+          <pre>
+          $(find data -type f | sort | sed 's|data/||' | while read f; do
+            echo "<a href=\"data/$f\">$f</a>"
+          done)
+          </pre>
 
-.container {
-  display: flex;
-  height: calc(100vh - 50px);
-}
+          <h2>⚙️ Nginx Config</h2>
+          <pre>
+          $(cat config/listFiles.conf)
+          </pre>
 
-.sidebar {
-  width: 340px;
-  border-right: 1px solid #30363d;
-  padding: 10px;
-  overflow: auto;
-}
-
-.main {
-  flex: 1;
-  padding: 20px;
-  overflow: auto;
-}
-
-pre {
-  background: #161b22;
-  padding: 10px;
-  border-radius: 6px;
-  overflow-x: auto;
-}
-
-a.file {
-  display: block;
-  padding: 5px;
-  color: #c9d1d9;
-  text-decoration: none;
-}
-
-a.file:hover {
-  background: #21262d;
-  color: #58a6ff;
-}
-
-.title {
-  color: #58a6ff;
-  margin-bottom: 10px;
-}
-</style>
-
-</head>
-
-<body>
-
-<div class="header">📁 Scripts File Server (Nginx Clone)</div>
-
-<div class="container">
-
-<div class="sidebar">
-<div class="title">📂 Tree</div>
-<pre>
-EOF
-
-          cat /tmp/tree.txt >> public/index.html
-
-          cat <<EOF >> public/index.html
-</pre>
-</div>
-
-<div class="main">
-
-<div class="title">📄 Files</div>
-<pre>
-EOF
-
-          cat /tmp/files.txt >> public/index.html
-
-          cat <<EOF >> public/index.html
-</pre>
-
-<div class="title">⚙️ Nginx Config</div>
-<pre>
-EOF
-
-          echo "$CONFIG_CONTENT" >> public/index.html
-
-          cat <<EOF >> public/index.html
-</pre>
-
-</div>
-</div>
-
-</body>
-</html>
-EOF
+          </body>
+          </html>
+          EOF
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -177,10 +98,15 @@ EOF
           path: public
 
   deploy:
+    name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
     needs: build
 
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
-      - name: Deploy
+      - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
