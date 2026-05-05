@@ -1,3 +1,59 @@
+name: Scripts Repo - Validate + Nginx UI + Deploy Pages
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Nginx Config
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Validate nginx config
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/config/listFiles.conf:/etc/nginx/conf.d/default.conf:ro \
+            nginx:latest nginx -t
+
+  build:
+    name: Build Nginx File Explorer UI
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install tree tool
+        run: sudo apt-get update && sudo apt-get install -y tree
+
+      - name: Build static site
+        run: |
+          rm -rf public
+          mkdir -p public
+
+          # IMPORTANT FIX: flatten data into root
+          cp -r data/. public/
+
+          mkdir -p public/config
+          cp config/listFiles.conf public/config/
+
           cat <<'EOF' > public/index.html
 <!DOCTYPE html>
 <html>
@@ -14,9 +70,9 @@
     }
 
     .header {
-      padding: 16px 20px;
-      border-bottom: 1px solid #30363d;
+      padding: 14px 20px;
       background: #161b22;
+      border-bottom: 1px solid #30363d;
       font-size: 14px;
     }
 
@@ -25,63 +81,54 @@
       height: calc(100vh - 50px);
     }
 
-    /* Sidebar (tree) */
+    /* Sidebar */
     .sidebar {
-      width: 320px;
+      width: 340px;
       border-right: 1px solid #30363d;
-      overflow-y: auto;
+      overflow: auto;
       padding: 10px;
     }
 
-    .tree ul {
-      list-style: none;
-      padding-left: 16px;
-    }
-
-    .tree li {
-      margin: 4px 0;
-    }
-
-    .tree a {
+    .sidebar pre {
+      white-space: pre;
+      font-size: 12px;
       color: #8b949e;
-      text-decoration: none;
     }
 
-    .tree a:hover {
-      color: #58a6ff;
-    }
-
-    /* Main panel */
+    /* Main */
     .main {
       flex: 1;
+      overflow: auto;
       padding: 20px;
-      overflow-y: auto;
-    }
-
-    .file-link {
-      display: block;
-      padding: 6px 10px;
-      border-radius: 6px;
-      color: #c9d1d9;
-      text-decoration: none;
-    }
-
-    .file-link:hover {
-      background: #161b22;
-      color: #58a6ff;
-    }
-
-    pre {
-      background: #161b22;
-      padding: 12px;
-      border-radius: 8px;
-      overflow-x: auto;
-      border: 1px solid #30363d;
     }
 
     .title {
       color: #58a6ff;
       margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    a.file {
+      display: block;
+      padding: 6px 10px;
+      margin: 2px 0;
+      border-radius: 6px;
+      color: #c9d1d9;
+      text-decoration: none;
+    }
+
+    a.file:hover {
+      background: #161b22;
+      color: #58a6ff;
+    }
+
+    pre.block {
+      background: #161b22;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      overflow-x: auto;
+      font-size: 12px;
     }
 
   </style>
@@ -97,7 +144,7 @@
 
   <!-- SIDEBAR TREE -->
   <div class="sidebar">
-    <div class="title">📂 Tree</div>
+    <div class="title">📂 Folder Tree</div>
     <pre>
 $(tree data 2>/dev/null || echo "tree not available")
     </pre>
@@ -108,16 +155,16 @@ $(tree data 2>/dev/null || echo "tree not available")
 
     <div class="title">📄 Files</div>
 
-    <pre>
+    <pre class="block">
 $(find data -type f 2>/dev/null | sort | while read f; do
   clean=${f#data/}
-  echo "<a class='file-link' href='/$clean'>📄 $clean</a>"
+  echo "<a class='file' href='/$clean'>📄 $clean</a>"
 done)
     </pre>
 
     <div class="title">⚙️ Nginx Config</div>
 
-    <pre>
+    <pre class="block">
 $(cat config/listFiles.conf 2>/dev/null)
     </pre>
 
@@ -128,3 +175,22 @@ $(cat config/listFiles.conf 2>/dev/null)
 </body>
 </html>
 EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: build
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
