@@ -1,74 +1,92 @@
-name: Deploy Scripts (Fixed Root Mapping)
+- name: Build nice file server UI
+  run: |
+    rm -rf public
+    mkdir -p public
 
-on:
-  push:
-    branches:
-      - main
+    # mirror data exactly
+    cp -r data/. public/
 
-  workflow_dispatch:
+    # generate styled index
+    cat <<'EOF' > public/index.html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Scripts File Server</title>
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+  <style>
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      margin: 0;
+      padding: 30px;
+    }
 
-concurrency:
-  group: pages
-  cancel-in-progress: true
+    h1 {
+      color: #58a6ff;
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+    .container {
+      max-width: 900px;
+      margin: auto;
+    }
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+    .file {
+      padding: 6px 10px;
+      margin: 2px 0;
+      border-radius: 6px;
+    }
 
-      - name: Debug structure (IMPORTANT)
-        run: |
-          echo "=== REPO STRUCTURE ==="
-          find .
+    .file:hover {
+      background: #161b22;
+    }
 
-      - name: Build correct public site (NO EXTRA FOLDERS)
-        run: |
-          rm -rf public
-          mkdir -p public
+    a {
+      color: #8b949e;
+      text-decoration: none;
+      display: block;
+    }
 
-          # CRITICAL FIX:
-          # Copy CONTENT of data/ directly into public root
-          cp -r data/. public/
+    a:hover {
+      color: #58a6ff;
+    }
 
-          echo "=== PUBLIC STRUCTURE ==="
-          find public
+    .path {
+      color: #6e7681;
+      font-size: 12px;
+      margin-bottom: 20px;
+    }
 
-      - name: Create minimal index (prevents 404 root issue)
-        run: |
-          cat <<EOF > public/index.html
-          <html>
-          <head>
-            <title>Scripts</title>
-          </head>
-          <body>
-            <h1>Scripts Index</h1>
-            <ul>
-          EOF
+    .folder {
+      margin-top: 15px;
+      color: #58a6ff;
+      font-weight: bold;
+    }
+  </style>
+</head>
 
-          find public -type f ! -name index.html | sed 's|public/||' | while read f; do
-            echo "<li><a href=\"/$f\">$f</a></li>" >> public/index.html
-          done
+<body>
+  <div class="container">
+    <h1>📁 Scripts File Server</h1>
+    <div class="path">Root: /data</div>
 
-          echo "</ul></body></html>" >> public/index.html
+    <div id="tree">
+EOF
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: public
+    # build grouped listing (folders first)
+    find public -type f ! -name index.html | sort | while read f; do
+      clean=${f#public/}
+      folder=$(dirname "$clean")
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
+      echo "<div class='file'><a href='/$clean'>📄 $clean</a></div>" >> public/index.html
+    done
 
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+    cat <<EOF >> public/index.html
+    </div>
+  </div>
+</body>
+</html>
+EOF
