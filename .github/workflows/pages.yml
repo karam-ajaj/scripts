@@ -1,10 +1,9 @@
-name: Deploy Scripts (Clean Root Mapping)
+name: Deploy Scripts Static Site
 
 on:
   push:
     branches:
       - main
-
   workflow_dispatch:
 
 permissions:
@@ -24,27 +23,25 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Build clean root (IMPORTANT FIX)
+      - name: Build site
         run: |
           rm -rf public
           mkdir -p public
 
-          # COPY ONLY CONTENT OF data/ INTO ROOT
-          # THIS FIXES DOUBLE /scripts/ PROBLEM
-          cp -r data/. public/
+          # copy ONLY data folder content
+          cp -r data/scripts public/
 
-      - name: Create index (optional but prevents 404)
-        run: |
+          # create minimal index (fixes 404)
           cat <<EOF > public/index.html
           <html>
           <head><title>Scripts</title></head>
           <body>
-          <h1>Scripts Root</h1>
+          <h1>Scripts Index</h1>
           <ul>
           EOF
 
           find public -type f ! -name index.html | sed 's|public/||' | while read f; do
-            echo "<li><a href=\"/$f\">$f</a></li>" >> public/index.html
+            echo "<li><a href=\"$f\">$f</a></li>" >> public/index.html
           done
 
           echo "</ul></body></html>" >> public/index.html
@@ -59,6 +56,6 @@ jobs:
     needs: build
 
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
