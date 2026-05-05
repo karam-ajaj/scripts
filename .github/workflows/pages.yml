@@ -1,92 +1,61 @@
-- name: Build nice file server UI
-  run: |
-    rm -rf public
-    mkdir -p public
+name: Deploy Scripts Static Site
 
-    # mirror data exactly
-    cp -r data/. public/
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
-    # generate styled index
-    cat <<'EOF' > public/index.html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Scripts File Server</title>
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
-  <style>
-    body {
-      background: #0d1117;
-      color: #c9d1d9;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      margin: 0;
-      padding: 30px;
-    }
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
-    h1 {
-      color: #58a6ff;
-      font-size: 20px;
-      margin-bottom: 20px;
-    }
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-    .container {
-      max-width: 900px;
-      margin: auto;
-    }
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    .file {
-      padding: 6px 10px;
-      margin: 2px 0;
-      border-radius: 6px;
-    }
+      - name: Build site
+        run: |
+          rm -rf public
+          mkdir -p public
 
-    .file:hover {
-      background: #161b22;
-    }
+          # copy ONLY data folder content
+          cp -r data/* public/
 
-    a {
-      color: #8b949e;
-      text-decoration: none;
-      display: block;
-    }
+          # create minimal index (fixes 404)
+          cat <<EOF > public/index.html
+          <html>
+          <head><title>Scripts</title></head>
+          <body>
+          <h1>Scripts Index</h1>
+          <ul>
+          EOF
 
-    a:hover {
-      color: #58a6ff;
-    }
+          find public -type f ! -name index.html | sed 's|public/||' | while read f; do
+            echo "<li><a href=\"$f\">$f</a></li>" >> public/index.html
+          done
 
-    .path {
-      color: #6e7681;
-      font-size: 12px;
-      margin-bottom: 20px;
-    }
+          echo "</ul></body></html>" >> public/index.html
 
-    .folder {
-      margin-top: 15px;
-      color: #58a6ff;
-      font-weight: bold;
-    }
-  </style>
-</head>
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
 
-<body>
-  <div class="container">
-    <h1>📁 Scripts File Server</h1>
-    <div class="path">Root: /data</div>
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
 
-    <div id="tree">
-EOF
-
-    # build grouped listing (folders first)
-    find public -type f ! -name index.html | sort | while read f; do
-      clean=${f#public/}
-      folder=$(dirname "$clean")
-
-      echo "<div class='file'><a href='/$clean'>📄 $clean</a></div>" >> public/index.html
-    done
-
-    cat <<EOF >> public/index.html
-    </div>
-  </div>
-</body>
-</html>
-EOF
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
