@@ -23,13 +23,11 @@ This means:
 
 ## Structure
 
-config/
-listFiles.conf -> linked from /swarm/config/scripts/listFiles.conf
+- `config/listFiles.conf` -> linked from `/swarm/config/scripts/listFiles.conf`
 
-data/
-scripts/ -> linked from /swarm/data/scripts
+- `data/scripts/` -> linked from `/swarm/data/scripts`
 
-docker-stack.yml
+- `docker-stack.yml`
 
 ---
 
