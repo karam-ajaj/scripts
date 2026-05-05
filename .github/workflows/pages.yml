@@ -18,11 +18,10 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate Nginx Config
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Validate nginx config
@@ -32,15 +31,14 @@ jobs:
             nginx:latest nginx -t
 
   build:
-    name: Build Nginx File Explorer UI
     runs-on: ubuntu-latest
     needs: validate
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install tree tool
+      - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y tree
 
       - name: Build static site
@@ -48,128 +46,125 @@ jobs:
           rm -rf public
           mkdir -p public
 
-          # IMPORTANT FIX: flatten data into root
+          # FIXED: correct flattening
           cp -r data/. public/
 
           mkdir -p public/config
           cp config/listFiles.conf public/config/
 
-          cat <<'EOF' > public/index.html
+          # generate file list safely
+          tree data > /tmp/tree.txt || echo "tree not available" > /tmp/tree.txt
+
+          find data -type f | sort | sed 's|data/||' | while read f; do
+            echo "<a class='file' href='/$f'>📄 $f</a>" >> /tmp/files.txt
+          done
+
+          CONFIG_CONTENT=$(cat config/listFiles.conf 2>/dev/null || echo "no config")
+
+          cat <<EOF > public/index.html
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Scripts File Server</title>
+<meta charset="UTF-8">
+<title>Scripts File Server</title>
 
-  <style>
-    body {
-      margin: 0;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      background: #0d1117;
-      color: #c9d1d9;
-    }
+<style>
+body {
+  margin: 0;
+  font-family: monospace;
+  background: #0d1117;
+  color: #c9d1d9;
+}
 
-    .header {
-      padding: 14px 20px;
-      background: #161b22;
-      border-bottom: 1px solid #30363d;
-      font-size: 14px;
-    }
+.header {
+  padding: 14px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+}
 
-    .container {
-      display: flex;
-      height: calc(100vh - 50px);
-    }
+.container {
+  display: flex;
+  height: calc(100vh - 50px);
+}
 
-    /* Sidebar */
-    .sidebar {
-      width: 340px;
-      border-right: 1px solid #30363d;
-      overflow: auto;
-      padding: 10px;
-    }
+.sidebar {
+  width: 340px;
+  border-right: 1px solid #30363d;
+  padding: 10px;
+  overflow: auto;
+}
 
-    .sidebar pre {
-      white-space: pre;
-      font-size: 12px;
-      color: #8b949e;
-    }
+.main {
+  flex: 1;
+  padding: 20px;
+  overflow: auto;
+}
 
-    /* Main */
-    .main {
-      flex: 1;
-      overflow: auto;
-      padding: 20px;
-    }
+pre {
+  background: #161b22;
+  padding: 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
 
-    .title {
-      color: #58a6ff;
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
+a.file {
+  display: block;
+  padding: 5px;
+  color: #c9d1d9;
+  text-decoration: none;
+}
 
-    a.file {
-      display: block;
-      padding: 6px 10px;
-      margin: 2px 0;
-      border-radius: 6px;
-      color: #c9d1d9;
-      text-decoration: none;
-    }
+a.file:hover {
+  background: #21262d;
+  color: #58a6ff;
+}
 
-    a.file:hover {
-      background: #161b22;
-      color: #58a6ff;
-    }
+.title {
+  color: #58a6ff;
+  margin-bottom: 10px;
+}
+</style>
 
-    pre.block {
-      background: #161b22;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid #30363d;
-      overflow-x: auto;
-      font-size: 12px;
-    }
-
-  </style>
 </head>
 
 <body>
 
-<div class="header">
-  📁 Scripts File Server (Nginx Clone UI)
-</div>
+<div class="header">📁 Scripts File Server (Nginx Clone)</div>
 
 <div class="container">
 
-  <!-- SIDEBAR TREE -->
-  <div class="sidebar">
-    <div class="title">📂 Folder Tree</div>
-    <pre>
-$(tree data 2>/dev/null || echo "tree not available")
-    </pre>
-  </div>
+<div class="sidebar">
+<div class="title">📂 Tree</div>
+<pre>
+EOF
 
-  <!-- MAIN CONTENT -->
-  <div class="main">
+          cat /tmp/tree.txt >> public/index.html
 
-    <div class="title">📄 Files</div>
+          cat <<EOF >> public/index.html
+</pre>
+</div>
 
-    <pre class="block">
-$(find data -type f 2>/dev/null | sort | while read f; do
-  clean=${f#data/}
-  echo "<a class='file' href='/$clean'>📄 $clean</a>"
-done)
-    </pre>
+<div class="main">
 
-    <div class="title">⚙️ Nginx Config</div>
+<div class="title">📄 Files</div>
+<pre>
+EOF
 
-    <pre class="block">
-$(cat config/listFiles.conf 2>/dev/null)
-    </pre>
+          cat /tmp/files.txt >> public/index.html
 
-  </div>
+          cat <<EOF >> public/index.html
+</pre>
 
+<div class="title">⚙️ Nginx Config</div>
+<pre>
+EOF
+
+          echo "$CONFIG_CONTENT" >> public/index.html
+
+          cat <<EOF >> public/index.html
+</pre>
+
+</div>
 </div>
 
 </body>
@@ -182,15 +177,10 @@ EOF
           path: public
 
   deploy:
-    name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
     needs: build
 
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
-      - name: Deploy Pages
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
