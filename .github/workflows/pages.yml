@@ -1,9 +1,10 @@
-name: Deploy Scripts Static Site
+name: Deploy Scripts (Fixed Root Mapping)
 
 on:
   push:
     branches:
       - main
+
   workflow_dispatch:
 
 permissions:
@@ -23,30 +24,42 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Build site
+      - name: Debug structure (IMPORTANT)
+        run: |
+          echo "=== REPO STRUCTURE ==="
+          find .
+
+      - name: Build correct public site (NO EXTRA FOLDERS)
         run: |
           rm -rf public
           mkdir -p public
 
-          # copy ONLY data folder content
-          cp -r data/scripts/ public/
+          # CRITICAL FIX:
+          # Copy CONTENT of data/ directly into public root
+          cp -r data/. public/
 
-          # create minimal index (fixes 404)
+          echo "=== PUBLIC STRUCTURE ==="
+          find public
+
+      - name: Create minimal index (prevents 404 root issue)
+        run: |
           cat <<EOF > public/index.html
           <html>
-          <head><title>Scripts</title></head>
+          <head>
+            <title>Scripts</title>
+          </head>
           <body>
-          <h1>Scripts Index</h1>
-          <ul>
+            <h1>Scripts Index</h1>
+            <ul>
           EOF
 
           find public -type f ! -name index.html | sed 's|public/||' | while read f; do
-            echo "<li><a href=\"$f\">$f</a></li>" >> public/index.html
+            echo "<li><a href=\"/$f\">$f</a></li>" >> public/index.html
           done
 
           echo "</ul></body></html>" >> public/index.html
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
@@ -56,6 +69,6 @@ jobs:
     needs: build
 
     steps:
-      - name: Deploy
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
